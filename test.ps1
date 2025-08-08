@@ -1,22 +1,21 @@
-DECLARE @DaysList VARCHAR(MAX) = '7,30,60';
+DECLARE @DaysList VARCHAR(MAX) = '7,30,60';  -- Comma-separated list of future days
+DECLARE @RangeBack INT = 3;                  -- How many days back to check (inclusive)
 
--- Sample table
--- Assuming you have a table named MyTable with a column DateColumn (of DATE or DATETIME type)
--- CREATE TABLE MyTable (DateColumn DATE);
-
--- Step 1: Split the comma-separated string into a table of integers
+-- CTE: Split the comma-separated string into individual integers
 ;WITH SplitDays AS (
-    SELECT 
-        value AS DaysToAdd
+    SELECT TRY_CAST(value AS INT) AS DaysFromNow
     FROM STRING_SPLIT(@DaysList, ',')
-)
--- Step 2: Add each day to GETDATE() and get the target dates
-, TargetDates AS (
+    WHERE ISNUMERIC(value) = 1
+),
+-- CTE: Generate the range of dates for each future day (e.g. 7,6,5 for 7)
+DateRanges AS (
     SELECT 
-        CAST(DATEADD(DAY, TRY_CAST(DaysToAdd AS INT), CAST(GETDATE() AS DATE)) AS DATE) AS TargetDate
+        DATEADD(DAY, DaysFromNow - v.number, CAST(GETDATE() AS DATE)) AS TargetDate
     FROM SplitDays
+    JOIN master.dbo.spt_values v ON v.type = 'P'
+    WHERE v.number < @RangeBack
 )
--- Step 3: Match records in your table
+-- Final query: match table records with any date in the generated range
 SELECT *
 FROM MyTable
-WHERE CAST(DateColumn AS DATE) IN (SELECT TargetDate FROM TargetDates);
+WHERE CAST(DateColumn AS DATE) IN (SELECT TargetDate FROM DateRanges);
